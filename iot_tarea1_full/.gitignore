@@ -1,0 +1,6 @@
+/raspberry/.env/
+.vscode/
+/esp32/sdkconfig
+/esp32/sdkconfig.old
+/esp32/.cache
+/esp32/build/

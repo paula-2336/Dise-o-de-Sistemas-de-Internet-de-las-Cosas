@@ -1,4 +1,4 @@
 bleak
-PyQt5
+PyQt6
 pyqtgraph
 numpy

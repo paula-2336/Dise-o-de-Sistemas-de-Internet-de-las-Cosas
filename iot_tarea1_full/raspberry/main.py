@@ -1,4 +1,4 @@
-
+import sys
 import asyncio
 import json
 import csv
@@ -122,10 +122,9 @@ async def run_ble_client(app):
             await asyncio.sleep(1)
 
 if __name__ == "__main__":
-    import sys
     qt_app = QtWidgets.QApplication(sys.argv)
     window = IoTApp()
     window.show()
-    
+
     loop = asyncio.get_event_loop()
-    sys.exit(qt_app.exec_())
+    sys.exit(qt_app.exec())
