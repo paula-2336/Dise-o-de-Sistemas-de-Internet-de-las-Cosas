@@ -26,6 +26,7 @@
 #include <host/ble_gatt.h>
 #include <services/gatt/ble_svc_gatt.h>
 #include <services/gap/ble_svc_gap.h>
+#include "esp_timer.h"
 #include "host/ble_att.h"
 #include "host/ble_hs_adv.h"
 #include "host/ble_hs_id.h"
@@ -63,7 +64,9 @@ uint16_t notify_conn = 0;
 
 //--------------------------------------------------
 
-typedef struct { float ax, ay, az; } accel_sample_t;
+typedef struct { float ts, ax, ay, az; } accel_sample_t;
+typedef struct { float ts, tmp; } temp_sample_t;
+
 accel_sample_t simulate_accel(void) {
     /* Eje principal: sinusoide + ruido uniforme */
     static float phase = 0.0f;
@@ -71,6 +74,7 @@ accel_sample_t simulate_accel(void) {
     float main_val = ACCEL_RANGE_G * sinf(phase)
         + ((float)rand() / RAND_MAX - 0.5f) * 1.0f;
     accel_sample_t s = {
+        .ts = (float)(esp_timer_get_time()),
         .ax = main_val,
         .ay = main_val * ATTENUATION + ((float)rand()/RAND_MAX - 0.5f)*0.5f,
         .az = main_val * ATTENUATION + ((float)rand()/RAND_MAX - 0.5f)*0.5f,
@@ -92,13 +96,18 @@ void acc_task() {
   }
 }
 
-float simulate_temperature(void) {
+temp_sample_t simulate_temperature(void) {
     static float temp = 25.0f;
     float delta = ((float)rand() / RAND_MAX - 0.5f) * 0.4f;
     temp += delta;
     if (temp < TEMP_MIN) temp = TEMP_MIN;
     if (temp > TEMP_MAX) temp = TEMP_MAX;
-    return temp;
+
+    temp_sample_t t = {
+      .ts = (float)(esp_timer_get_time()),
+      .tmp = temp,
+    };
+    return t;
 }
 
 
@@ -126,8 +135,20 @@ int chr_access(uint16_t conn_handle, uint16_t attr_handle,
   }
 
   if (ctxt->op == BLE_GATT_ACCESS_OP_READ_CHR) {
-    os_mbuf_append(ctxt->om, &store, 1);
-    printf("se leyo dslklkds\n");
+
+    if(attr_handle == acc_char_attr_handle) {
+      accel_sample_t acc_val = simulate_accel();
+      os_mbuf_append(ctxt->om, &acc_val, sizeof(acc_val));
+
+      return 0;
+    }
+
+    if(attr_handle == tmp_char_attr_handle) {
+      temp_sample_t tmp_val = simulate_temperature();
+      os_mbuf_append(ctxt->om, &tmp_val, sizeof(tmp_val));
+
+      return 0;
+    }
 
   } else if (ctxt->op == BLE_GATT_ACCESS_OP_WRITE_CHR) {
     if (ctxt->om->om_len != sizeof(store)) {

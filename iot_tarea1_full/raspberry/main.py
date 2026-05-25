@@ -10,8 +10,9 @@ from PyQt5 import QtWidgets, QtCore
 import pyqtgraph as pg
 
 # UUIDs 
-ACCEL_CHAR_UUID = "00002a58-0000-1000-8000-00805f9b34fb"
-TEMP_CHAR_UUID = "0000246e-0000-1000-8000-00805f9b34fb"
+ACCEL_CHAR_UUID = "00001801-0000-1000-8000-00805f9b34fb"
+TEMP_CHAR_UUID = "00002ae6-0000-1000-8000-00805f9b34fb"
+DEV_NAME = "Tarea_1"
 
 class IoTApp(QtWidgets.QMainWindow):
     def __init__(self):
@@ -115,7 +116,24 @@ async def run_ble_client(app):
         ts, temp = struct.unpack("<If", data)
         app.update_temp(temp, ts)
 
-    async with BleakClient(config["esp32_address"]) as client:
+
+    device = await BleakScanner.find_device_by_name(DEV_NAME)
+
+    if device is None:
+        print(f"Dispositivo no encontrado: {DEV_NAME}")
+        return
+    
+    async with BleakClient(device) as client:
+        print(f"Conectado a {DEV_NAME} con dirección {client.address} \n")
+
+        print("Servicios:\n")
+        for service in client.services:
+            print(f"Servicio-{service.description} - {service.uuid}\n")
+
+            for char in service.characteristics:
+                print(f"caracteristica {char.description} - {char.uuid}\n")
+            print()
+        
         await client.start_notify(ACCEL_CHAR_UUID, accel_handler)
         await client.start_notify(TEMP_CHAR_UUID, temp_handler)
         while True:
@@ -126,5 +144,4 @@ if __name__ == "__main__":
     window = IoTApp()
     window.show()
 
-    loop = asyncio.get_event_loop()
-    sys.exit(qt_app.exec())
+    asyncio.run(run_ble_client(window))
