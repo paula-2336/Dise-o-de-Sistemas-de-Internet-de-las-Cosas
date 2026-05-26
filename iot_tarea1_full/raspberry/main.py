@@ -8,11 +8,14 @@ import numpy as np
 from bleak import BleakClient, BleakScanner
 from PyQt5 import QtWidgets, QtCore
 import pyqtgraph as pg
+import qasync
 
 # UUIDs 
 ACCEL_CHAR_UUID = "00001801-0000-1000-8000-00805f9b34fb"
 TEMP_CHAR_UUID = "00002ae6-0000-1000-8000-00805f9b34fb"
+PHONE_UUID = "00002b2e-0000-1000-8000-00805f9b34fb"
 DEV_NAME = "Tarea_1"
+PHONE_NAME = "Test_celu"
 
 class IoTApp(QtWidgets.QMainWindow):
     def __init__(self):
@@ -101,6 +104,12 @@ class IoTApp(QtWidgets.QMainWindow):
         if self.is_logging:
             self.csv_writer.writerow([ts, "ESP32_Temp", "", "", "", temp, ""])
 
+    def update_phone(self, char, ts):
+        if not self.cb_phone.isChecked(): return
+        self.lbl_phone.setText(f"Dato recibido: {char}")
+        if self.is_logging:
+            self.csv_writer.writerow([ts, "PHONE_Char", "", "", "", char, ""])
+
 async def run_ble_client(app):
     # Load config
     with open("config.json") as f:
@@ -124,24 +133,49 @@ async def run_ble_client(app):
         return
     
     async with BleakClient(device) as client:
-        print(f"Conectado a {DEV_NAME} con dirección {client.address} \n")
 
-        print("Servicios:\n")
-        for service in client.services:
-            print(f"Servicio-{service.description} - {service.uuid}\n")
-
-            for char in service.characteristics:
-                print(f"caracteristica {char.description} - {char.uuid}\n")
-            print()
-        
         await client.start_notify(ACCEL_CHAR_UUID, accel_handler)
         await client.start_notify(TEMP_CHAR_UUID, temp_handler)
         while True:
             await asyncio.sleep(1)
 
-if __name__ == "__main__":
-    qt_app = QtWidgets.QApplication(sys.argv)
+async def run_phone(app):
+    print("Conectando a celular")
+
+    def phone_handler(sender, data):
+
+        print(f"Notificacion recibida: {data.decode('utf-8')}")
+        ts = time.time()
+        char = data.decode('utf-8')
+        app.update_phone(char, ts)
+
+    phone = await BleakScanner.find_device_by_name(PHONE_NAME)
+
+    if phone is None:
+        print(f"Celular no encontrado: {PHONE_NAME}")
+        return
+    
+    async with BleakClient(phone) as client:
+
+        await client.start_notify(PHONE_UUID, phone_handler)
+        while True:
+            await asyncio.sleep(1)
+
+async def main():
+
     window = IoTApp()
     window.show()
 
-    asyncio.run(run_ble_client(window))
+    await asyncio.gather(
+        run_phone(window)
+    )
+
+
+if __name__ == "__main__":
+    qt_app = QtWidgets.QApplication(sys.argv)
+
+    loop = qasync.QEventLoop(qt_app)
+    asyncio.set_event_loop(loop)
+
+    with loop:
+        loop.run_until_complete(main())
