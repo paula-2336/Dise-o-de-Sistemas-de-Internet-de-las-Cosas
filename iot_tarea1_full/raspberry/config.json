@@ -1,4 +1,7 @@
 {
-  "esp32_address": "73:C5:1E:6A:0A:44",
-  "smartphone_uuid": "0000xxxx-0000-1000-8000-00805f9b34fb"
+  "esp32_name": "Tarea_1",
+  "smartphone_name": "Test_celu",
+  "acceleration_uuid": "00001801-0000-1000-8000-00805f9b34fb",
+  "temperature_uuid": "00002ae6-0000-1000-8000-00805f9b34fb",
+  "smartphone_uuid": "00002b2e-0000-1000-8000-00805f9b34fb"
 }

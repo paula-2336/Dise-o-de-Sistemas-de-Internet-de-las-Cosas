@@ -10,12 +10,7 @@ from PyQt5 import QtWidgets, QtCore
 import pyqtgraph as pg
 import qasync
 
-# UUIDs 
-ACCEL_CHAR_UUID = "00001801-0000-1000-8000-00805f9b34fb"
-TEMP_CHAR_UUID = "00002ae6-0000-1000-8000-00805f9b34fb"
-PHONE_UUID = "00002b2e-0000-1000-8000-00805f9b34fb"
-DEV_NAME = "Tarea_1"
-PHONE_NAME = "Test_celu"
+scanner_lock = asyncio.Lock()
 
 class IoTApp(QtWidgets.QMainWindow):
     def __init__(self):
@@ -97,23 +92,23 @@ class IoTApp(QtWidgets.QMainWindow):
 
         if self.is_logging:
             self.csv_writer.writerow([ts, "ESP32_Accel", ax, ay, az, "", ""])
+            self.csv_file.flush()
 
     def update_temp(self, temp, ts):
         if not self.cb_temp.isChecked(): return
         self.lbl_temp.setText(f"Temp: {temp:.2f} C (TS: {ts})")
         if self.is_logging:
             self.csv_writer.writerow([ts, "ESP32_Temp", "", "", "", temp, ""])
+            self.csv_file.flush()
 
     def update_phone(self, char, ts):
         if not self.cb_phone.isChecked(): return
         self.lbl_phone.setText(f"Dato recibido: {char}")
         if self.is_logging:
             self.csv_writer.writerow([ts, "PHONE_Char", "", "", "", char, ""])
+            self.csv_file.flush()
 
 async def run_ble_client(app):
-    # Load config
-    with open("config.json") as f:
-        config = json.load(f)
 
     def accel_handler(sender, data):
         # Format: uint32 (4) + 3*float32 (12) = 16 bytes
@@ -125,22 +120,43 @@ async def run_ble_client(app):
         ts, temp = struct.unpack("<If", data)
         app.update_temp(temp, ts)
 
-
-    device = await BleakScanner.find_device_by_name(DEV_NAME)
-
-    if device is None:
-        print(f"Dispositivo no encontrado: {DEV_NAME}")
-        return
+    # Load config
+    with open("config.json") as f:
+        config = json.load(f)
     
-    async with BleakClient(device) as client:
+    DEV_NAME = config["esp32_name"]
+    ACCEL_CHAR_UUID = config["acceleration_uuid"]
+    TEMP_CHAR_UUID = config["temperature_uuid"]
 
-        await client.start_notify(ACCEL_CHAR_UUID, accel_handler)
-        await client.start_notify(TEMP_CHAR_UUID, temp_handler)
-        while True:
-            await asyncio.sleep(1)
+    while True:
+
+        device = None
+
+        async with scanner_lock:
+
+            print("Conectando a dispositivo")
+
+            device = await BleakScanner.find_device_by_name(DEV_NAME)
+
+            if device is None:
+                print(f"Dispositivo no encontrado: {DEV_NAME}")
+                print("Reintentando...")
+                continue
+        
+        print(f"Dispositivo encontrado: {DEV_NAME}")
+        
+        async with BleakClient(device) as client:
+
+            await client.start_notify(ACCEL_CHAR_UUID, accel_handler)
+            await client.start_notify(TEMP_CHAR_UUID, temp_handler)
+            while client.is_connected:
+                await asyncio.sleep(1)
+
+            print("Dispositivo desconectado")
+            print("Reiniciando busqueda")
 
 async def run_phone(app):
-    print("Conectando a celular")
+    await asyncio.sleep(1)
 
     def phone_handler(sender, data):
 
@@ -148,18 +164,38 @@ async def run_phone(app):
         ts = time.time()
         char = data.decode('utf-8')
         app.update_phone(char, ts)
-
-    phone = await BleakScanner.find_device_by_name(PHONE_NAME)
-
-    if phone is None:
-        print(f"Celular no encontrado: {PHONE_NAME}")
-        return
     
-    async with BleakClient(phone) as client:
+    # Load config
+    with open("config.json") as f:
+        config = json.load(f)
 
-        await client.start_notify(PHONE_UUID, phone_handler)
-        while True:
-            await asyncio.sleep(1)
+    PHONE_NAME = config["smartphone_name"]
+    PHONE_UUID = config["smartphone_uuid"]
+
+    while True:
+
+        phone = None
+        async with scanner_lock:
+
+            print("Conectando a celular")
+
+            phone = await BleakScanner.find_device_by_name(PHONE_NAME)
+
+            if phone is None:
+                print(f"Celular no encontrado: {PHONE_NAME}")
+                print("Reintentando...")
+                continue
+        
+        print(f"Celular: {PHONE_NAME} encontrado")
+        
+        async with BleakClient(phone) as client:
+
+            await client.start_notify(PHONE_UUID, phone_handler)
+            while client.is_connected:
+                await asyncio.sleep(1)
+            
+        print("Celular desconectado")
+        print("Reiniciando busqueda")
 
 async def main():
 
@@ -167,7 +203,7 @@ async def main():
     window.show()
 
     await asyncio.gather(
-        run_phone(window)
+        run_ble_client(window)
     )
 
 

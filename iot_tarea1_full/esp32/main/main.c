@@ -74,7 +74,7 @@ accel_sample_t simulate_accel(void) {
     float main_val = ACCEL_RANGE_G * sinf(phase)
         + ((float)rand() / RAND_MAX - 0.5f) * 1.0f;
     accel_sample_t s = {
-        .ts = (float)(esp_timer_get_time()),
+        .ts = (uint32_t)(esp_timer_get_time()),
         .ax = main_val,
         .ay = main_val * ATTENUATION + ((float)rand()/RAND_MAX - 0.5f)*0.5f,
         .az = main_val * ATTENUATION + ((float)rand()/RAND_MAX - 0.5f)*0.5f,
@@ -89,7 +89,7 @@ void acc_task() {
     if (notify_status) {
       int err = ble_gatts_notify(notify_conn, notify_acc);
       if (err) {
-        printf("algo");
+        printf("error");
         continue;
       }
     }
@@ -104,7 +104,7 @@ temp_sample_t simulate_temperature(void) {
     if (temp > TEMP_MAX) temp = TEMP_MAX;
 
     temp_sample_t t = {
-      .ts = (float)(esp_timer_get_time()),
+      .ts = (uint32_t)(esp_timer_get_time()),
       .tmp = temp,
     };
     return t;
@@ -118,7 +118,7 @@ void temp_task() {
     if (notify_status) {
       int err = ble_gatts_notify(notify_conn, notify_temp);
       if (err) {
-        printf("algo");
+        printf("error");
         continue;
       }
     }
@@ -156,7 +156,6 @@ int chr_access(uint16_t conn_handle, uint16_t attr_handle,
     }
 
     store = ctxt->om->om_data[0];
-    printf("Se escrinio\n");
 
   } else {
     return BLE_ATT_ERR_UNLIKELY;
